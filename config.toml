@@ -1,0 +1,21 @@
+[bilibili]
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+# cookie = ""  # 可选：如遇到 API 频率限制，填入浏览器中的 B站 Cookie
+
+[[bilibili.accounts]]
+uid = 401742377
+name = "原神"
+game = "genshin"
+
+[[bilibili.accounts]]
+uid = 1340190821
+name = "崩坏：星穹铁道"
+game = "starrail"
+
+[[bilibili.accounts]]
+uid = 1636034895
+name = "绝区零"
+game = "zzz"
+
+[storage]
+db_path = "data/dynamics.db"

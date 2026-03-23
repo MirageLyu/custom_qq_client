@@ -1,0 +1,37 @@
+---
+description: Network proxy and SSL settings for this project environment
+alwaysApply: true
+---
+
+# Network Proxy Configuration
+
+When encountering network issues (timeouts, connection failures, SSL errors), use these settings:
+
+- **HTTP/HTTPS Proxy**: `http://127.0.0.1:7890`
+- **SSL Verification**: Can be disabled if needed
+
+## npm
+
+```bash
+npm config set proxy http://127.0.0.1:7890
+npm config set https-proxy http://127.0.0.1:7890
+npm config set strict-ssl false
+```
+
+## curl / wget
+
+```bash
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+```
+
+## Rust (cargo)
+
+Set environment variable `HTTPS_PROXY=http://127.0.0.1:7890` or configure in `.cargo/config.toml`.
+
+## Git
+
+```bash
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+```

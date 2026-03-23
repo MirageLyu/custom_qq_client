@@ -1,0 +1,8 @@
+/target
+/data
+openclaw-config/.env
+*.db
+debug_response.json
+output_*.txt
+build.log
+build2.log

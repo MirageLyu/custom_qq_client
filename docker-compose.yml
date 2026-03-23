@@ -1,0 +1,17 @@
+services:
+  openclaw:
+    build: .
+    restart: unless-stopped
+    volumes:
+      # 自定义 Skill
+      - ./skills:/root/.openclaw/skills
+      # Agent 身份 & 配置
+      - ./openclaw-config/SOUL.md:/root/.openclaw/SOUL.md
+      # B站配置（可热更新）
+      - ./config.toml:/app/config.toml
+      # SQLite 持久化数据
+      - ./data:/app/data
+    ports:
+      - "18789:18789"
+    env_file:
+      - ./openclaw-config/.env
