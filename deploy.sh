@@ -201,17 +201,18 @@ if command -v openclaw &>/dev/null; then
 fi
 
 # 杀掉占用 18789 的进程
-PORT_PID=$(ss -tlnp 2>/dev/null | grep ':18789' | grep -oP 'pid=\K[0-9]+' | head -1)
-if [[ -n "$PORT_PID" ]]; then
+PORT_PID=$(ss -tlnp 2>/dev/null | grep ':18789' | grep -oP 'pid=\K[0-9]+' | head -1 || true)
+if [[ -n "${PORT_PID:-}" ]]; then
     warn "端口 18789 被 PID=$PORT_PID 占用，正在终止..."
     kill "$PORT_PID" 2>/dev/null || sudo kill "$PORT_PID" 2>/dev/null || true
     sleep 2
-    # 确认是否已释放
     if ss -tlnp 2>/dev/null | grep -q ':18789'; then
         warn "强制终止..."
         kill -9 "$PORT_PID" 2>/dev/null || sudo kill -9 "$PORT_PID" 2>/dev/null || true
         sleep 1
     fi
+else
+    info "端口 18789 未被占用"
 fi
 
 # 修复 openclaw-data 目录权限（容器内 node 用户 UID=1000）
