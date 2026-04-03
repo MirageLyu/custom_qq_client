@@ -137,6 +137,7 @@ fi
 # ===== 3. 生成 gateway token =====
 info "[3/9] 生成 OpenClaw gateway 配置..."
 GATEWAY_TOKEN=$(openssl rand -hex 24)
+SERVER_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || curl -s --max-time 5 icanhazip.com 2>/dev/null || echo "0.0.0.0")
 
 mkdir -p "$OPENCLAW_DATA/skills/bilibili-dynamics"
 mkdir -p "$SCRIPT_DIR/data"
@@ -152,12 +153,14 @@ cat > "$OPENCLAW_DATA/openclaw.json" <<ENDJSON
     },
     "controlUi": {
       "allowInsecureAuth": true,
-      "dangerouslyDisableDeviceAuth": true
+      "dangerouslyDisableDeviceAuth": true,
+      "allowedOrigins": ["http://$SERVER_IP:18789"]
     }
   }
 }
 ENDJSON
 info "Gateway token 已生成（48 字符随机十六进制）"
+info "已允许的 Origin: http://$SERVER_IP:18789"
 
 # ===== 4. 复制 SOUL.md 和 skills =====
 info "[4/9] 同步 SOUL.md 和 skills 到 openclaw-data/..."
