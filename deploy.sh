@@ -167,17 +167,36 @@ if [[ -d "$SCRIPT_DIR/skills/bilibili-dynamics" ]]; then
     cp -r "$SCRIPT_DIR/skills/bilibili-dynamics/"* "$OPENCLAW_DATA/skills/bilibili-dynamics/"
 fi
 
-# ===== 5. 构建 Docker 镜像 =====
-info "[5/9] 构建 Docker 镜像（含 Rust qq-client 编译，首次可能较慢）..."
+# ===== 5. 编译 qq-client（宿主机上编译，避免拉取 Docker Hub 的 rust 镜像）=====
+info "[5/10] 编译 qq-client..."
+if [[ -f "$SCRIPT_DIR/qq-client" ]] && [[ "$SCRIPT_DIR/qq-client" -nt "$SCRIPT_DIR/src/main.rs" ]]; then
+    info "qq-client 二进制已存在且较新，跳过编译"
+else
+    if ! command -v rustc &>/dev/null; then
+        info "安装 Rust 工具链..."
+        sudo apt-get install -y -qq build-essential pkg-config libssl-dev
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
+    fi
+    source "$HOME/.cargo/env" 2>/dev/null || true
+    info "编译 qq-client（首次编译约 3-5 分钟）..."
+    cd "$SCRIPT_DIR"
+    cargo build --release
+    cp target/release/qq-client "$SCRIPT_DIR/qq-client"
+    info "qq-client 编译完成"
+fi
+
+# ===== 6. 构建 Docker 镜像 =====
+info "[6/10] 构建 Docker 镜像..."
 docker compose -f "$COMPOSE_FILE" build
 
-# ===== 6. 启动容器 =====
-info "[6/9] 启动 OpenClaw 容器..."
+# ===== 7. 启动容器 =====
+info "[7/10] 启动 OpenClaw 容器..."
 docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" up -d
 
-# ===== 7. 等待网关就绪 =====
-info "[7/9] 等待网关就绪..."
+# ===== 8. 等待网关就绪 =====
+info "[8/10] 等待网关就绪..."
 MAX_WAIT=60
 WAITED=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
@@ -195,8 +214,8 @@ if [[ $WAITED -ge $MAX_WAIT ]]; then
     warn "请检查日志：docker compose -f docker-compose.prod.yml logs -f"
 fi
 
-# ===== 8. 安装 QQ Bot 插件 =====
-info "[8/9] 安装 QQ Bot 插件..."
+# ===== 9. 安装 QQ Bot 插件 =====
+info "[9/10] 安装 QQ Bot 插件..."
 CONTAINER_NAME=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | head -1)
 if [[ -z "$CONTAINER_NAME" ]]; then
     error "未找到运行中的容器"
@@ -224,8 +243,8 @@ else
     warn "QQ Bot 插件安装失败，请手动安装"
 fi
 
-# ===== 9. 配置 QQ Bot 频道 =====
-info "[9/9] 配置 QQ Bot 频道..."
+# ===== 10. 配置 QQ Bot 频道 =====
+info "[10/10] 配置 QQ Bot 频道..."
 QQBOT_TOKEN="${QQBOT_TOKEN:-}"
 if [[ -z "$QQBOT_TOKEN" && -n "${QQBOT_APPID:-}" && -n "${QQBOT_SECRET:-}" ]]; then
     QQBOT_TOKEN="${QQBOT_APPID}:${QQBOT_SECRET}"

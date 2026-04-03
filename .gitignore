@@ -1,5 +1,6 @@
 /target
 /data
+/qq-client
 openclaw-config/.env
 openclaw-data/
 *.db
