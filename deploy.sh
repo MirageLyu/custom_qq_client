@@ -144,7 +144,7 @@ mkdir -p "$SCRIPT_DIR/data"
 cat > "$OPENCLAW_DATA/openclaw.json" <<ENDJSON
 {
   "gateway": {
-    "host": "0.0.0.0",
+    "bind": "lan",
     "port": 18789,
     "auth": {
       "mode": "token",
