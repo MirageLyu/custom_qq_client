@@ -144,7 +144,8 @@ mkdir -p "$SCRIPT_DIR/data"
 cat > "$OPENCLAW_DATA/openclaw.json" <<ENDJSON
 {
   "gateway": {
-    "mode": "local",
+    "host": "0.0.0.0",
+    "port": 18789,
     "auth": {
       "mode": "token",
       "token": "$GATEWAY_TOKEN"
@@ -190,9 +191,35 @@ fi
 info "[6/10] 构建 Docker 镜像..."
 docker compose -f "$COMPOSE_FILE" build
 
+# ===== 6.5. 清理端口占用和修复权限 =====
+info "检查端口 18789 占用情况..."
+docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+
+# 停止宿主机上可能存在的原生 OpenClaw 进程
+if command -v openclaw &>/dev/null; then
+    openclaw gateway stop 2>/dev/null || true
+fi
+
+# 杀掉占用 18789 的进程
+PORT_PID=$(ss -tlnp 2>/dev/null | grep ':18789' | grep -oP 'pid=\K[0-9]+' | head -1)
+if [[ -n "$PORT_PID" ]]; then
+    warn "端口 18789 被 PID=$PORT_PID 占用，正在终止..."
+    kill "$PORT_PID" 2>/dev/null || sudo kill "$PORT_PID" 2>/dev/null || true
+    sleep 2
+    # 确认是否已释放
+    if ss -tlnp 2>/dev/null | grep -q ':18789'; then
+        warn "强制终止..."
+        kill -9 "$PORT_PID" 2>/dev/null || sudo kill -9 "$PORT_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+# 修复 openclaw-data 目录权限（容器内 node 用户 UID=1000）
+info "修复 openclaw-data 目录权限..."
+sudo chown -R 1000:1000 "$OPENCLAW_DATA"
+
 # ===== 7. 启动容器 =====
 info "[7/10] 启动 OpenClaw 容器..."
-docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" up -d
 
 # ===== 8. 等待网关就绪 =====
