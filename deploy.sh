@@ -26,24 +26,61 @@ echo ""
 
 # ===== 1. 检测并安装 Docker =====
 info "[1/9] 检测 Docker..."
-if ! command -v docker &>/dev/null; then
-    info "Docker 未安装，正在自动安装..."
+
+# 国内镜像优先，官方源作为 fallback
+DOCKER_MIRRORS=(
+    "https://mirrors.aliyun.com/docker-ce"
+    "https://mirrors.tencent.com/docker-ce"
+    "https://download.docker.com"
+)
+
+install_docker_from_mirror() {
+    local mirror="$1"
+    info "尝试从 ${mirror} 安装 Docker..."
     sudo apt-get update -qq
-    sudo apt-get install -y -qq docker.io docker-compose-plugin
+    sudo apt-get install -y -qq ca-certificates curl gnupg
+
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo rm -f /etc/apt/keyrings/docker.gpg
+
+    if ! curl -fsSL --connect-timeout 10 "${mirror}/linux/ubuntu/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null; then
+        warn "  GPG 密钥下载失败: ${mirror}"
+        return 1
+    fi
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ${mirror}/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
     sudo systemctl enable --now docker
     sudo usermod -aG docker "$USER"
     info "Docker 已安装。如果后续命令报权限错误，请执行 'newgrp docker' 或重新登录。"
+    return 0
+}
+
+install_docker() {
+    for mirror in "${DOCKER_MIRRORS[@]}"; do
+        if install_docker_from_mirror "$mirror"; then
+            return 0
+        fi
+        warn "镜像 ${mirror} 失败，尝试下一个..."
+    done
+    error "所有 Docker 安装源均失败。请手动安装 Docker：\n  curl -fsSL https://get.docker.com | bash"
+}
+
+if ! command -v docker &>/dev/null; then
+    info "Docker 未安装，正在自动安装..."
+    install_docker
 else
     info "Docker 已安装: $(docker --version)"
 fi
 
 if ! docker compose version &>/dev/null; then
-    if command -v docker-compose &>/dev/null; then
-        warn "未检测到 'docker compose' 插件，但找到 docker-compose。正在安装插件..."
-        sudo apt-get install -y -qq docker-compose-plugin 2>/dev/null || true
-    fi
+    warn "未检测到 'docker compose' 插件，正在安装..."
+    install_docker
     if ! docker compose version &>/dev/null; then
-        error "无法使用 'docker compose'，请手动安装 docker-compose-plugin"
+        error "无法使用 'docker compose'，请手动安装：\n  sudo apt-get install -y docker-compose-plugin\n  或参考 https://docs.docker.com/engine/install/ubuntu/"
     fi
 fi
 info "Docker Compose: $(docker compose version --short 2>/dev/null || echo 'ok')"
