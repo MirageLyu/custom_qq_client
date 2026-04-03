@@ -16,10 +16,11 @@ RUN touch src/main.rs && cargo build --release
 FROM ghcr.io/openclaw/openclaw:latest
 
 COPY --from=builder /build/target/release/qq-client /usr/local/bin/qq-client
-RUN chmod +x /usr/local/bin/qq-client
 
 COPY config.toml /app/config.toml
 
 RUN mkdir -p /app/data
+
+ENV OPENCLAW_SERVICE_KIND=gateway
 
 WORKDIR /app

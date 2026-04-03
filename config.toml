@@ -1,6 +1,6 @@
 [bilibili]
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-# cookie = ""  # 可选：如遇到 API 频率限制，填入浏览器中的 B站 Cookie
+cookie = "buvid3=EA42D3FC-53CE-A703-3176-73D3C88F333E94865infoc; b_nut=1762156394; _uuid=10DA2EF2B-E1C9-2328-34EB-9E411ED853D595207infoc; buvid_fp=7ccc7e67420d912f67a7778d137b5d3c; buvid4=99665A39-13F7-8321-6BB0-FEF75EBB108595954-025110315-mwJO8+OtkZJ2YFC/yWn6Hg%3D%3D; DedeUserID=40398971; DedeUserID__ckMd5=a13c42771783c32b; theme-tip-show=SHOWED; CURRENT_QUALITY=80; rpdid=|(k|)l|kuR)u0J'u~YkulYRYm; hit-dyn-v2=1; bmg_af_switch=1; bmg_src_def_domain=i2.hdslb.com; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzUzNTU1MjMsImlhdCI6MTc3NTA5NjI2MywicGx0IjotMX0.jLGAqhVSRIJ3YMwoYncJz_mZGtxAtTTuKl_9jHLiMkA; bili_ticket_expires=1775355463; SESSDATA=7657dbee%2C1790648324%2C89f80%2A42CjAbv4z8p0gg8IAFmEqyJ3hlno0lTKbfOuuMBXuj9Ki8fGhIfDdmtA-BZgSXQ1TueB0SVnRIYi05RURXcWZScG5vNlBvck91dmlPNzVSWDZFdWQzaFQ3dzhwSk1oWjUwTkk1Nmx4UzN1ZmJJNUQ3Qzd0b1Q5dHRXdUY3Ym9qQndqcVpHSjQ3VmlBIIEC; bili_jct=7eb43408b3f08143a4c6d7032227318b; sid=7z6e5tdc; CURRENT_FNVAL=2000; home_feed_column=4; browser_resolution=261-928; b_lsid=AC58F871_19D4BFD3B27"
 
 [[bilibili.accounts]]
 uid = 401742377

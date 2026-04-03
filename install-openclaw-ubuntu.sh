@@ -90,13 +90,18 @@ openclaw plugins install @tencent-connect/openclaw-qqbot@latest 2>/dev/null || t
 # 从 .env 读取 QQ Bot Token（若有）
 QQBOT_TOKEN=""
 if [[ -f "$PROJECT_DIR/openclaw-config/.env" ]]; then
-    QQBOT_TOKEN=$(grep -E '^QQBOT_TOKEN=' "$PROJECT_DIR/openclaw-config/.env" | cut -d= -f2- | tr -d '"' | tr -d "'")
+    set -a
+    source "$PROJECT_DIR/openclaw-config/.env"
+    set +a
+fi
+if [[ -z "$QQBOT_TOKEN" && -n "$QQBOT_APPID" && -n "$QQBOT_SECRET" ]]; then
+    QQBOT_TOKEN="${QQBOT_APPID}:${QQBOT_SECRET}"
 fi
 if [[ -z "$QQBOT_TOKEN" || "$QQBOT_TOKEN" == "你的AppID:你的AppSecret" ]]; then
     echo ""
     echo "  请配置 QQ Bot Token："
     echo "    1. 编辑 $PROJECT_DIR/openclaw-config/.env"
-    echo "    2. 将 QQBOT_TOKEN=你的AppID:你的AppSecret 改为实际值"
+    echo "    2. 填入 QQBOT_APPID / QQBOT_SECRET（或直接设置 QQBOT_TOKEN）"
     echo "    3. 然后执行: openclaw channels add --channel qqbot --token \"AppID:AppSecret\""
     echo "    4. 执行: openclaw gateway restart"
 else
@@ -112,12 +117,12 @@ echo "=== 安装完成 ==="
 echo "OpenClaw 控制面板: http://localhost:18789"
 echo ""
 echo "后续步骤："
-echo "  1. 若未配置 QQ Bot：编辑 openclaw-config/.env 填入 QQBOT_TOKEN，再执行："
+echo "  1. 若未配置 QQ Bot：编辑 openclaw-config/.env 填入 QQBOT_APPID / QQBOT_SECRET（或 QQBOT_TOKEN），再执行："
 echo "     openclaw channels add --channel qqbot --token \"AppID:AppSecret\""
 echo "     openclaw gateway restart"
 echo "  2. 若需配置 AI 模型（阿里云百炼等）："
 echo "     编辑 ~/.openclaw/openclaw.json 添加 models.providers"
-echo "  3. 在 QQ 中搜索并添加机器人为好友，私聊测试"
+echo "  3. 在 QQ 中搜索并添加机器人为好友，私聊测试：原神最近有什么新动态"
 echo ""
 echo "常用命令："
 echo "  openclaw gateway start   # 启动网关"

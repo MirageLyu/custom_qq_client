@@ -1,6 +1,7 @@
 /target
 /data
 openclaw-config/.env
+openclaw-data/
 *.db
 debug_response.json
 output_*.txt

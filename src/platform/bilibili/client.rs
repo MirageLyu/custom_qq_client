@@ -76,6 +76,21 @@ impl BiliClient {
         parts.join("; ")
     }
 
+    async fn warm_up_space_page(&self, uid: u64, cookie: &str) -> Result<(), AppError> {
+        let url = format!("https://space.bilibili.com/{}/dynamic", uid);
+        self.client
+            .get(url)
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .header("Referer", "https://www.bilibili.com")
+            .header("Cookie", cookie)
+            .send()
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_space_dynamics(
         &mut self,
         uid: u64,
@@ -94,8 +109,13 @@ impl BiliClient {
         debug!(url = %url, "fetching dynamics");
 
         let cookie = self.build_cookie();
+        let _ = self.warm_up_space_page(uid, &cookie).await;
         let resp = self.client
             .get(&url)
+            .header("Accept", "application/json, text/plain, */*")
+            .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
             .header("Referer", "https://www.bilibili.com")
             .header("Origin", "https://www.bilibili.com")
             .header("Cookie", &cookie)
@@ -106,6 +126,13 @@ impl BiliClient {
         let body = resp.text().await?;
 
         if !status.is_success() {
+            if status.as_u16() == 412 {
+                return Err(AppError::Other(format!(
+                    "HTTP 412 Precondition Failed，B站触发风控，请在 config.toml 的 `bilibili.cookie` 中填入浏览器导出的 Cookie（建议至少包含 SESSDATA）后重试。响应片段: {}",
+                    &body[..body.len().min(300)]
+                )));
+            }
+
             return Err(AppError::Other(format!(
                 "HTTP {} - body: {}",
                 status,

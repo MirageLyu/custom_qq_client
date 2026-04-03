@@ -1,4 +1,27 @@
+use serde::Serialize;
+
 use super::types::*;
+
+#[derive(Debug, Serialize)]
+pub struct DynamicStatsSummary {
+    pub likes: i64,
+    pub comments: i64,
+    pub forwards: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DynamicSummary {
+    pub id: String,
+    pub url: String,
+    pub dynamic_type: String,
+    pub dynamic_type_label: String,
+    pub author: Option<String>,
+    pub published_at: Option<String>,
+    pub timestamp: Option<i64>,
+    pub title: Option<String>,
+    pub text: Option<String>,
+    pub stats: DynamicStatsSummary,
+}
 
 pub struct DynamicFormatter;
 
@@ -159,7 +182,67 @@ impl DynamicFormatter {
         format!("[卡片] {}\n{}", title, desc)
     }
 
-    fn type_label(t: &str) -> &str {
+    pub fn summarize(item: &DynamicItem) -> DynamicSummary {
+        let author = item.modules.module_author.as_ref().map(|a| a.name.clone());
+        let timestamp = item.modules.module_author.as_ref().and_then(|a| a.pub_ts);
+        let published_at = timestamp
+            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string());
+        let stats = DynamicStatsSummary {
+            likes: item
+                .modules
+                .module_stat
+                .as_ref()
+                .and_then(|s| s.like.as_ref())
+                .and_then(|s| s.count)
+                .unwrap_or(0),
+            comments: item
+                .modules
+                .module_stat
+                .as_ref()
+                .and_then(|s| s.comment.as_ref())
+                .and_then(|s| s.count)
+                .unwrap_or(0),
+            forwards: item
+                .modules
+                .module_stat
+                .as_ref()
+                .and_then(|s| s.forward.as_ref())
+                .and_then(|s| s.count)
+                .unwrap_or(0),
+        };
+
+        DynamicSummary {
+            id: item.id_str.clone(),
+            url: format!("https://t.bilibili.com/{}", item.id_str),
+            dynamic_type: item.dynamic_type.clone(),
+            dynamic_type_label: Self::type_label(&item.dynamic_type).to_string(),
+            author,
+            published_at,
+            timestamp,
+            title: Self::extract_title(item),
+            text: Self::extract_text(item),
+            stats,
+        }
+    }
+
+    pub fn is_low_value_forward(item: &DynamicItem) -> bool {
+        if item.dynamic_type != "DYNAMIC_TYPE_FORWARD" {
+            return false;
+        }
+
+        let text = Self::extract_text(item).unwrap_or_default();
+        let normalized: String = text
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .flat_map(|ch| ch.to_lowercase())
+            .collect();
+        let keywords = ["抽奖", "开奖", "转发", "互动抽奖", "恭喜", "福利"];
+
+        keywords.iter().any(|keyword| normalized.contains(keyword))
+    }
+
+    pub fn type_label(t: &str) -> &str {
         match t {
             "DYNAMIC_TYPE_DRAW" => "图文动态",
             "DYNAMIC_TYPE_AV" => "视频投稿",
@@ -175,5 +258,53 @@ impl DynamicFormatter {
             "DYNAMIC_TYPE_NONE" => "已删除/不可见",
             other => other,
         }
+    }
+
+    fn extract_title(item: &DynamicItem) -> Option<String> {
+        let dynamic = item.modules.module_dynamic.as_ref()?;
+        let major = dynamic.major.as_ref()?;
+
+        match major.major_type.as_str() {
+            "MAJOR_TYPE_ARCHIVE" => major.archive.as_ref()?.title.clone(),
+            "MAJOR_TYPE_ARTICLE" => major.article.as_ref()?.title.clone(),
+            "MAJOR_TYPE_OPUS" => major.opus.as_ref()?.title.clone(),
+            "MAJOR_TYPE_COMMON" => major.common.as_ref()?.title.clone(),
+            _ => None,
+        }
+    }
+
+    fn extract_text(item: &DynamicItem) -> Option<String> {
+        let dynamic = item.modules.module_dynamic.as_ref()?;
+
+        if let Some(desc) = dynamic.desc.as_ref().and_then(|desc| desc.text.clone()) {
+            let trimmed = desc.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+
+        let major = dynamic.major.as_ref()?;
+        match major.major_type.as_str() {
+            "MAJOR_TYPE_ARCHIVE" => major.archive.as_ref()?.desc.clone(),
+            "MAJOR_TYPE_ARTICLE" => major.article.as_ref()?.desc.clone(),
+            "MAJOR_TYPE_OPUS" => major
+                .opus
+                .as_ref()?
+                .summary
+                .as_ref()?
+                .text
+                .as_ref()
+                .map(|text| text.trim().to_string()),
+            "MAJOR_TYPE_COMMON" => major.common.as_ref()?.desc.clone(),
+            _ => None,
+        }
+        .and_then(|text| {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
     }
 }

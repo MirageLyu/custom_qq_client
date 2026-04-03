@@ -1,0 +1,221 @@
+#!/bin/bash
+# Ubuntu 公网服务器一键部署脚本
+# 用法：git clone 仓库 → 填写 openclaw-config/.env → bash deploy.sh
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/openclaw-config/.env"
+ENV_EXAMPLE="$SCRIPT_DIR/openclaw-config/.env.example"
+OPENCLAW_DATA="$SCRIPT_DIR/openclaw-data"
+COMPOSE_FILE="$SCRIPT_DIR/docker-compose.prod.yml"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
+error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+
+echo ""
+echo "============================================"
+echo "  OpenClaw + QQ Bot 一键部署 (Ubuntu)"
+echo "============================================"
+echo ""
+
+# ===== 1. 检测并安装 Docker =====
+info "[1/9] 检测 Docker..."
+if ! command -v docker &>/dev/null; then
+    info "Docker 未安装，正在自动安装..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq docker.io docker-compose-plugin
+    sudo systemctl enable --now docker
+    sudo usermod -aG docker "$USER"
+    info "Docker 已安装。如果后续命令报权限错误，请执行 'newgrp docker' 或重新登录。"
+else
+    info "Docker 已安装: $(docker --version)"
+fi
+
+if ! docker compose version &>/dev/null; then
+    if command -v docker-compose &>/dev/null; then
+        warn "未检测到 'docker compose' 插件，但找到 docker-compose。正在安装插件..."
+        sudo apt-get install -y -qq docker-compose-plugin 2>/dev/null || true
+    fi
+    if ! docker compose version &>/dev/null; then
+        error "无法使用 'docker compose'，请手动安装 docker-compose-plugin"
+    fi
+fi
+info "Docker Compose: $(docker compose version --short 2>/dev/null || echo 'ok')"
+
+# ===== 2. 检查 .env 文件 =====
+info "[2/9] 检查环境配置..."
+if [[ ! -f "$ENV_FILE" ]]; then
+    if [[ -f "$ENV_EXAMPLE" ]]; then
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
+        warn ".env 不存在，已从 .env.example 复制。请编辑后重新运行："
+        warn "  vim $ENV_FILE"
+        exit 1
+    else
+        error "未找到 $ENV_FILE 和 $ENV_EXAMPLE，请先创建 .env 文件"
+    fi
+fi
+
+set -a
+source "$ENV_FILE"
+set +a
+
+HAS_LLM_KEY=false
+for key in OPENAI_API_KEY ANTHROPIC_API_KEY DEEPSEEK_API_KEY; do
+    val="${!key:-}"
+    if [[ -n "$val" && "$val" != sk-xxx* && "$val" != "sk-ant-xxx" ]]; then
+        HAS_LLM_KEY=true
+        break
+    fi
+done
+if [[ "$HAS_LLM_KEY" == "false" ]]; then
+    warn "未检测到有效的 LLM API Key（OPENAI_API_KEY / ANTHROPIC_API_KEY / DEEPSEEK_API_KEY）"
+    warn "OpenClaw 将无法回复消息，请在 .env 中配置后重启容器。"
+fi
+
+# ===== 3. 生成 gateway token =====
+info "[3/9] 生成 OpenClaw gateway 配置..."
+GATEWAY_TOKEN=$(openssl rand -hex 24)
+
+mkdir -p "$OPENCLAW_DATA/skills/bilibili-dynamics"
+mkdir -p "$SCRIPT_DIR/data"
+
+cat > "$OPENCLAW_DATA/openclaw.json" <<ENDJSON
+{
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "$GATEWAY_TOKEN"
+    },
+    "controlUi": {
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
+    }
+  }
+}
+ENDJSON
+info "Gateway token 已生成（48 字符随机十六进制）"
+
+# ===== 4. 复制 SOUL.md 和 skills =====
+info "[4/9] 同步 SOUL.md 和 skills 到 openclaw-data/..."
+if [[ -f "$SCRIPT_DIR/openclaw-config/SOUL.md" ]]; then
+    cp "$SCRIPT_DIR/openclaw-config/SOUL.md" "$OPENCLAW_DATA/SOUL.md"
+fi
+if [[ -d "$SCRIPT_DIR/skills/bilibili-dynamics" ]]; then
+    cp -r "$SCRIPT_DIR/skills/bilibili-dynamics/"* "$OPENCLAW_DATA/skills/bilibili-dynamics/"
+fi
+
+# ===== 5. 构建 Docker 镜像 =====
+info "[5/9] 构建 Docker 镜像（含 Rust qq-client 编译，首次可能较慢）..."
+docker compose -f "$COMPOSE_FILE" build
+
+# ===== 6. 启动容器 =====
+info "[6/9] 启动 OpenClaw 容器..."
+docker compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+docker compose -f "$COMPOSE_FILE" up -d
+
+# ===== 7. 等待网关就绪 =====
+info "[7/9] 等待网关就绪..."
+MAX_WAIT=60
+WAITED=0
+while [[ $WAITED -lt $MAX_WAIT ]]; do
+    if curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18789" 2>/dev/null | grep -q '200\|301\|302\|304'; then
+        info "网关已就绪（等待 ${WAITED}s）"
+        break
+    fi
+    sleep 3
+    WAITED=$((WAITED + 3))
+    printf "  等待中... %ds / %ds\r" "$WAITED" "$MAX_WAIT"
+done
+echo ""
+if [[ $WAITED -ge $MAX_WAIT ]]; then
+    warn "等待超时（${MAX_WAIT}s），网关可能尚未完全启动"
+    warn "请检查日志：docker compose -f docker-compose.prod.yml logs -f"
+fi
+
+# ===== 8. 安装 QQ Bot 插件 =====
+info "[8/9] 安装 QQ Bot 插件..."
+CONTAINER_NAME=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | head -1)
+if [[ -z "$CONTAINER_NAME" ]]; then
+    error "未找到运行中的容器"
+fi
+
+PLUGIN_INSTALLED=false
+docker compose -f "$COMPOSE_FILE" exec -T openclaw openclaw plugins install @tencent-connect/openclaw-qqbot@latest 2>/dev/null && PLUGIN_INSTALLED=true
+
+if [[ "$PLUGIN_INSTALLED" == "false" ]]; then
+    warn "从 ClawHub 安装失败（可能遭遇限流），尝试从 npm 下载..."
+    TMP_TGZ="/tmp/openclaw-qqbot.tgz"
+    npm pack @tencent-connect/openclaw-qqbot --pack-destination /tmp 2>/dev/null || \
+        curl -sL "https://registry.npmjs.org/@tencent-connect/openclaw-qqbot/-/openclaw-qqbot-1.6.7.tgz" -o "$TMP_TGZ"
+    ACTUAL_TGZ=$(ls /tmp/tencent-connect-openclaw-qqbot-*.tgz 2>/dev/null | head -1)
+    [[ -z "$ACTUAL_TGZ" ]] && ACTUAL_TGZ="$TMP_TGZ"
+    if [[ -f "$ACTUAL_TGZ" ]]; then
+        docker cp "$ACTUAL_TGZ" "${CONTAINER_NAME}:/tmp/qqbot.tgz"
+        docker compose -f "$COMPOSE_FILE" exec -T openclaw openclaw plugins install /tmp/qqbot.tgz --dangerously-force-unsafe-install --pin 2>/dev/null && PLUGIN_INSTALLED=true
+    fi
+fi
+
+if [[ "$PLUGIN_INSTALLED" == "true" ]]; then
+    info "QQ Bot 插件安装成功"
+else
+    warn "QQ Bot 插件安装失败，请手动安装"
+fi
+
+# ===== 9. 配置 QQ Bot 频道 =====
+info "[9/9] 配置 QQ Bot 频道..."
+QQBOT_TOKEN="${QQBOT_TOKEN:-}"
+if [[ -z "$QQBOT_TOKEN" && -n "${QQBOT_APPID:-}" && -n "${QQBOT_SECRET:-}" ]]; then
+    QQBOT_TOKEN="${QQBOT_APPID}:${QQBOT_SECRET}"
+fi
+
+if [[ -z "$QQBOT_TOKEN" || "$QQBOT_TOKEN" == *"你的"* ]]; then
+    warn "未检测到有效的 QQ Bot 凭证，跳过频道配置。"
+    warn "请在 .env 中填写 QQBOT_APPID 和 QQBOT_SECRET 后执行："
+    warn "  docker compose -f docker-compose.prod.yml exec openclaw openclaw channels add --channel qqbot --token \"AppID:AppSecret\""
+    warn "  docker compose -f docker-compose.prod.yml exec openclaw openclaw gateway restart"
+else
+    docker compose -f "$COMPOSE_FILE" exec -T -e QQBOT_TOKEN="$QQBOT_TOKEN" openclaw \
+        sh -c 'openclaw channels add --channel qqbot --token "$QQBOT_TOKEN" || true'
+    docker compose -f "$COMPOSE_FILE" exec -T openclaw openclaw gateway restart 2>/dev/null || true
+    info "QQ Bot 频道已配置"
+fi
+
+# ===== 完成，输出信息 =====
+SERVER_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || curl -s --max-time 5 icanhazip.com 2>/dev/null || echo "<服务器IP>")
+
+echo ""
+echo "============================================"
+echo -e "  ${GREEN}部署完成！${NC}"
+echo "============================================"
+echo ""
+echo "OpenClaw 控制面板："
+echo -e "  ${GREEN}http://${SERVER_IP}:18789/#token=${GATEWAY_TOKEN}${NC}"
+echo ""
+echo "Gateway Token（已保存到 openclaw-data/openclaw.json）："
+echo "  $GATEWAY_TOKEN"
+echo ""
+echo "常用命令："
+echo "  docker compose -f docker-compose.prod.yml logs -f    # 查看日志"
+echo "  docker compose -f docker-compose.prod.yml restart    # 重启服务"
+echo "  docker compose -f docker-compose.prod.yml down       # 停止服务"
+echo ""
+
+if [[ -n "$QQBOT_TOKEN" && "$QQBOT_TOKEN" != *"你的"* ]]; then
+    echo -e "${YELLOW}重要提醒：${NC}"
+    echo "  请在 https://q.qq.com/ 的机器人设置中添加服务器公网 IP 到白名单"
+    echo -e "  服务器公网 IP: ${GREEN}${SERVER_IP}${NC}"
+    echo ""
+fi
+
+echo "验证部署："
+echo "  1. 浏览器打开上方控制面板 URL，确认 Gateway 正常运行"
+echo "  2. 在 QQ 上 @机器人 发消息验证回复"
+echo "  3. 发送「原神最新动态」验证 skills 工作"
+echo ""

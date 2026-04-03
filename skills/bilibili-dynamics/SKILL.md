@@ -32,41 +32,41 @@ author: qq-client
 ### 查询所有游戏的最新动态
 
 ```bash
-C:\Users\Administrator\.openclaw\bin\qq-client.exe -c C:\Users\Administrator\Documents\Projects\qq-client\config.toml fetch --all --show-all --format json
+qq-client --config /app/config.toml latest --all --count 2 --format json
 ```
 
 ### 查询指定游戏的最新动态
 
 ```bash
-C:\Users\Administrator\.openclaw\bin\qq-client.exe -c C:\Users\Administrator\Documents\Projects\qq-client\config.toml fetch --uid <UID> --show-all --format json
+qq-client --config /app/config.toml latest --game <游戏名> --count 5 --format json
 ```
 
-将 `<UID>` 替换为上表中对应的 B站UID。
+将 `<游戏名>` 替换为 `原神`、`星铁`、`绝区零`、`genshin`、`hsr`、`zzz` 之一。
 
 ### 查询多页历史动态
 
 ```bash
-C:\Users\Administrator\.openclaw\bin\qq-client.exe -c C:\Users\Administrator\Documents\Projects\qq-client\config.toml fetch --uid <UID> --show-all --format json --pages 3
+qq-client --config /app/config.toml latest --game <游戏名> --count 5 --format json --pages 3 --include-forwards
 ```
 
 ### 查看数据库统计
 
 ```bash
-C:\Users\Administrator\.openclaw\bin\qq-client.exe -c C:\Users\Administrator\Documents\Projects\qq-client\config.toml stats
+qq-client --config /app/config.toml stats
 ```
 
 ## 如何格式化回复
 
-从 JSON 输出中提取以下字段，为用户组织简洁的回复：
+`latest --format json` 的输出已经是摘要结构，优先使用以下字段组织回复：
 
-1. **作者名称**: `modules.module_author.name`
-2. **发布时间**: `modules.module_author.pub_ts`（Unix 时间戳，转换为可读时间）
-3. **动态类型**: `type` 字段（DYNAMIC_TYPE_AV=视频, DYNAMIC_TYPE_DRAW=图文, DYNAMIC_TYPE_WORD=纯文字, DYNAMIC_TYPE_FORWARD=转发）
-4. **文字内容**: `modules.module_dynamic.desc.text`
-5. **图片**: `modules.module_dynamic.major.draw.items[].src`
-6. **视频**: `modules.module_dynamic.major.archive`（标题、封面、BV号）
-7. **互动数据**: `modules.module_stat`（点赞、评论、转发）
-8. **动态链接**: `https://t.bilibili.com/{id_str}`
+1. **游戏名称**: 顶层 `game`
+2. **发布时间**: `items[].published_at`
+3. **动态类型**: `items[].dynamic_type_label`
+4. **标题**: `items[].title`
+5. **正文摘要**: `items[].text`
+6. **互动数据**: `items[].stats.likes` / `comments` / `forwards`
+7. **动态链接**: `items[].url`
+8. **错误信息**: 顶层 `error`，如果非空则如实告知用户查询失败
 
 回复格式示例：
 
@@ -88,5 +88,5 @@ C:\Users\Administrator\.openclaw\bin\qq-client.exe -c C:\Users\Administrator\Doc
 
 - 每次最多展示最近 5 条动态，避免消息过长
 - 如果用户没有指定游戏，展示所有三款游戏各 2 条最新动态
-- 转发类动态（抽奖开奖等）可以简略展示，标注"[转发/抽奖]"
+- 默认会过滤抽奖/开奖等低价值转发；只有在用户明确要求历史或转发内容时，才加上 `--include-forwards`
 - 如果命令执行失败，告诉用户稍后重试
