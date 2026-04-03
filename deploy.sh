@@ -214,33 +214,67 @@ if [[ $WAITED -ge $MAX_WAIT ]]; then
     warn "请检查日志：docker compose -f docker-compose.prod.yml logs -f"
 fi
 
-# ===== 9. 安装 QQ Bot 插件 =====
+# ===== 9. 安装 QQ Bot 插件（直接解压，不走 openclaw plugins install，避免吃满小服务器资源）=====
 info "[9/10] 安装 QQ Bot 插件..."
-CONTAINER_NAME=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | head -1)
-if [[ -z "$CONTAINER_NAME" ]]; then
-    error "未找到运行中的容器"
-fi
+PLUGIN_DIR="$OPENCLAW_DATA/plugins/@tencent-connect/openclaw-qqbot"
 
-PLUGIN_INSTALLED=false
-docker compose -f "$COMPOSE_FILE" exec -T openclaw openclaw plugins install @tencent-connect/openclaw-qqbot@latest 2>/dev/null && PLUGIN_INSTALLED=true
-
-if [[ "$PLUGIN_INSTALLED" == "false" ]]; then
-    warn "从 ClawHub 安装失败（可能遭遇限流），尝试从 npm 下载..."
+if [[ -d "$PLUGIN_DIR" && -f "$PLUGIN_DIR/package.json" ]]; then
+    info "QQ Bot 插件已存在，跳过安装"
+    PLUGIN_INSTALLED=true
+else
+    PLUGIN_INSTALLED=false
     TMP_TGZ="/tmp/openclaw-qqbot.tgz"
-    npm pack @tencent-connect/openclaw-qqbot --pack-destination /tmp 2>/dev/null || \
-        curl -sL "https://registry.npmjs.org/@tencent-connect/openclaw-qqbot/-/openclaw-qqbot-1.6.7.tgz" -o "$TMP_TGZ"
-    ACTUAL_TGZ=$(ls /tmp/tencent-connect-openclaw-qqbot-*.tgz 2>/dev/null | head -1)
-    [[ -z "$ACTUAL_TGZ" ]] && ACTUAL_TGZ="$TMP_TGZ"
-    if [[ -f "$ACTUAL_TGZ" ]]; then
-        docker cp "$ACTUAL_TGZ" "${CONTAINER_NAME}:/tmp/qqbot.tgz"
-        docker compose -f "$COMPOSE_FILE" exec -T openclaw openclaw plugins install /tmp/qqbot.tgz --dangerously-force-unsafe-install --pin 2>/dev/null && PLUGIN_INSTALLED=true
+
+    info "下载 QQ Bot 插件包..."
+    curl -sL --connect-timeout 10 --max-time 60 \
+        "https://registry.npmmirror.com/@tencent-connect/openclaw-qqbot/latest" -o /tmp/qqbot-meta.json 2>/dev/null
+
+    # 从 npmmirror 元数据中提取 tarball URL
+    TARBALL_URL=""
+    if [[ -f /tmp/qqbot-meta.json ]]; then
+        TARBALL_URL=$(grep -o '"tarball":"[^"]*"' /tmp/qqbot-meta.json | head -1 | cut -d'"' -f4)
+    fi
+
+    if [[ -n "$TARBALL_URL" ]]; then
+        info "从 $TARBALL_URL 下载..."
+        curl -sL --connect-timeout 10 --max-time 60 "$TARBALL_URL" -o "$TMP_TGZ"
+    fi
+
+    # fallback: 直接拼 URL
+    if [[ ! -f "$TMP_TGZ" || ! -s "$TMP_TGZ" ]]; then
+        info "尝试备用下载地址..."
+        curl -sL --connect-timeout 10 --max-time 60 \
+            "https://registry.npmmirror.com/@tencent-connect/openclaw-qqbot/-/openclaw-qqbot-1.7.1.tgz" -o "$TMP_TGZ" 2>/dev/null || \
+        curl -sL --connect-timeout 10 --max-time 60 \
+            "https://registry.npmjs.org/@tencent-connect/openclaw-qqbot/-/openclaw-qqbot-1.7.1.tgz" -o "$TMP_TGZ" 2>/dev/null
+    fi
+
+    if [[ -f "$TMP_TGZ" && -s "$TMP_TGZ" ]]; then
+        info "解压插件到 $PLUGIN_DIR ..."
+        mkdir -p "$PLUGIN_DIR"
+        tar -xzf "$TMP_TGZ" -C "$PLUGIN_DIR" --strip-components=1
+        if [[ -f "$PLUGIN_DIR/package.json" ]]; then
+            PLUGIN_INSTALLED=true
+            info "QQ Bot 插件安装成功（直接解压，零资源消耗）"
+        else
+            warn "解压后未找到 package.json，插件可能不完整"
+        fi
+        rm -f "$TMP_TGZ" /tmp/qqbot-meta.json
+    else
+        warn "插件包下载失败"
     fi
 fi
 
+if [[ "$PLUGIN_INSTALLED" == "false" ]]; then
+    warn "QQ Bot 插件自动安装失败，请手动下载并解压到："
+    warn "  $PLUGIN_DIR"
+fi
+
+# 插件安装到宿主机的 openclaw-data/ 后需要重启容器以加载
 if [[ "$PLUGIN_INSTALLED" == "true" ]]; then
-    info "QQ Bot 插件安装成功"
-else
-    warn "QQ Bot 插件安装失败，请手动安装"
+    info "重启容器以加载插件..."
+    docker compose -f "$COMPOSE_FILE" restart
+    sleep 5
 fi
 
 # ===== 10. 配置 QQ Bot 频道 =====
