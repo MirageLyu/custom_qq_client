@@ -85,6 +85,25 @@ if ! docker compose version &>/dev/null; then
 fi
 info "Docker Compose: $(docker compose version --short 2>/dev/null || echo 'ok')"
 
+# 配置 Docker Hub 镜像加速（国内服务器拉取 docker.io 镜像经常超时）
+DAEMON_JSON="/etc/docker/daemon.json"
+if [[ ! -f "$DAEMON_JSON" ]] || ! grep -q "registry-mirrors" "$DAEMON_JSON" 2>/dev/null; then
+    info "配置 Docker Hub 镜像加速..."
+    sudo mkdir -p /etc/docker
+    sudo tee "$DAEMON_JSON" > /dev/null <<'DAEMONJSON'
+{
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com",
+    "https://hub-mirror.c.163.com",
+    "https://docker.mirrors.ustc.edu.cn"
+  ]
+}
+DAEMONJSON
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+    info "Docker Hub 镜像加速已配置"
+fi
+
 # ===== 2. 检查 .env 文件 =====
 info "[2/9] 检查环境配置..."
 if [[ ! -f "$ENV_FILE" ]]; then
