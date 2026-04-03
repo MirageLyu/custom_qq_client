@@ -19,6 +19,7 @@ cat > openclaw-data/openclaw.json <<'EOF'
     "providers": {
       "dashscope": {
         "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "apiKey": "sk-f41c96a153d6402593caae7803da1d16",
         "api": "openai-completions",
         "models": [
           { "id": "qwen3.5-plus", "name": "Qwen 3.5 Plus" },
@@ -44,12 +45,6 @@ cat > openclaw-data/openclaw.json <<'EOF'
   }
 }
 EOF
-
-# 确保 .env 里有 DASHSCOPE_API_KEY
-if ! grep -q 'DASHSCOPE_API_KEY' openclaw-config/.env 2>/dev/null; then
-    echo 'DASHSCOPE_API_KEY=sk-f41c96a153d6402593caae7803da1d16' >> openclaw-config/.env
-    echo "已添加 DASHSCOPE_API_KEY"
-fi
 
 sudo chown -R 1000:1000 openclaw-data
 docker compose -f docker-compose.prod.yml down
