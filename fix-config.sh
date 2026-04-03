@@ -5,7 +5,7 @@ cat > openclaw-data/openclaw.json <<'EOF'
 {
   "agents": {
     "defaults": {
-      "model": "openai/qwen3.5-plus",
+      "model": "modelstudio/qwen3.5-plus",
       "maxConcurrent": 4,
       "subagents": {
         "maxConcurrent": 8
