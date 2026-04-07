@@ -20,6 +20,10 @@ pub struct DynamicSummary {
     pub timestamp: Option<i64>,
     pub title: Option<String>,
     pub text: Option<String>,
+    /// 视频封面 / 图片动态首图 / 专栏封面 / 图文首图等，供富文本展示
+    pub thumbnail_url: Option<String>,
+    /// 供大模型生成 ≤20 字标题的输入（类型+标题+正文，已截断）
+    pub headline_source: String,
     pub stats: DynamicStatsSummary,
 }
 
@@ -222,8 +226,103 @@ impl DynamicFormatter {
             timestamp,
             title: Self::extract_title(item),
             text: Self::extract_text(item),
+            thumbnail_url: Self::extract_thumbnail(item),
+            headline_source: Self::build_headline_source(item),
             stats,
         }
+    }
+
+    /// 视频用 cover，图片动态用首张图，专栏/图文用首张封面或图
+    pub fn extract_thumbnail(item: &DynamicItem) -> Option<String> {
+        Self::extract_thumbnail_inner(item, true)
+    }
+
+    fn extract_thumbnail_inner(item: &DynamicItem, recurse_into_orig: bool) -> Option<String> {
+        let from_major = item
+            .modules
+            .module_dynamic
+            .as_ref()
+            .and_then(|d| d.major.as_ref())
+            .and_then(Self::thumbnail_from_major);
+        if let Some(u) = from_major {
+            return Self::normalize_bili_image_url(&u);
+        }
+        if recurse_into_orig {
+            if let Some(orig) = &item.orig {
+                return Self::extract_thumbnail_inner(orig, true);
+            }
+        }
+        None
+    }
+
+    fn thumbnail_from_major(major: &DynamicMajor) -> Option<String> {
+        match major.major_type.as_str() {
+            "MAJOR_TYPE_ARCHIVE" => major.archive.as_ref().and_then(|a| a.cover.clone()),
+            "MAJOR_TYPE_DRAW" => major
+                .draw
+                .as_ref()
+                .and_then(|d| d.items.first())
+                .map(|i| i.src.clone()),
+            "MAJOR_TYPE_ARTICLE" => major
+                .article
+                .as_ref()
+                .and_then(|a| a.covers.as_ref())
+                .and_then(|c| c.first())
+                .cloned(),
+            "MAJOR_TYPE_OPUS" => major
+                .opus
+                .as_ref()
+                .and_then(|o| o.pics.as_ref())
+                .and_then(|p| p.first())
+                .and_then(|pic| pic.url.clone()),
+            "MAJOR_TYPE_COMMON" => major.common.as_ref().and_then(|c| c.cover.clone()),
+            _ => None,
+        }
+    }
+
+    fn normalize_bili_image_url(raw: &str) -> Option<String> {
+        let t = raw.trim();
+        if t.is_empty() {
+            return None;
+        }
+        Some(if t.starts_with("//") {
+            format!("https:{t}")
+        } else {
+            t.to_string()
+        })
+    }
+
+    /// 合并类型、标题、正文；转发会附带转发对象摘要
+    fn build_headline_source(item: &DynamicItem) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        parts.push(format!("类型: {}", Self::type_label(&item.dynamic_type)));
+        if let Some(t) = Self::extract_title(item) {
+            parts.push(format!("标题: {}", t));
+        }
+        if let Some(tx) = Self::extract_text(item) {
+            parts.push(format!("正文: {}", tx));
+        }
+        if item.dynamic_type == "DYNAMIC_TYPE_FORWARD" {
+            if let Some(orig) = item.orig.as_ref() {
+                parts.push("---转发原文---".to_string());
+                if let Some(t) = Self::extract_title(orig) {
+                    parts.push(format!("标题: {}", t));
+                }
+                if let Some(tx) = Self::extract_text(orig) {
+                    parts.push(format!("正文: {}", tx));
+                }
+            }
+        }
+        let s = parts.join("\n");
+        Self::truncate_chars(s, 800)
+    }
+
+    fn truncate_chars(s: String, max_chars: usize) -> String {
+        let count = s.chars().count();
+        if count <= max_chars {
+            return s;
+        }
+        s.chars().take(max_chars).collect::<String>() + "…"
     }
 
     pub fn is_low_value_forward(item: &DynamicItem) -> bool {
