@@ -67,8 +67,8 @@ enum Commands {
         #[arg(long, default_value = "1")]
         pages: usize,
 
-        /// 输出格式: text / json
-        #[arg(long, default_value = "text")]
+        /// 输出格式: json（默认，含缩略图与 headline_source）/ text（仅调试用，会输出旧版【游戏】块）
+        #[arg(long, default_value = "json")]
         format: String,
 
         /// 包含低价值转发动态（默认会过滤抽奖/开奖类转发）
@@ -260,7 +260,10 @@ async fn cmd_latest(
 
     match format {
         "json" => println!("{}", serde_json::to_string_pretty(&outputs)?),
-        _ => print!("{}", render_latest_text(&outputs)),
+        _ => {
+            info!("latest 使用 text 格式：仅供调试；OpenClaw 回复用户请用默认 json 或显式 --format json");
+            print!("{}", render_latest_text(&outputs));
+        }
     }
 
     Ok(())
