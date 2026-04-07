@@ -145,7 +145,12 @@ fi
 
 # ===== 6. 生成配置 =====
 info "[6/8] 生成 OpenClaw 配置..."
-GATEWAY_TOKEN=$(openssl rand -hex 24)
+# 迭代部署时保留已有 gateway token，避免书签里的 #token= 失效
+if [[ -f "$OPENCLAW_DATA/openclaw.json" ]]; then
+    GATEWAY_TOKEN=$(grep -oP '"token"\s*:\s*"\K[^"]+' "$OPENCLAW_DATA/openclaw.json" 2>/dev/null | head -1 || true)
+fi
+[[ -z "${GATEWAY_TOKEN:-}" ]] && GATEWAY_TOKEN=$(openssl rand -hex 24)
+
 SERVER_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || curl -s --max-time 5 icanhazip.com 2>/dev/null || echo "0.0.0.0")
 
 mkdir -p "$OPENCLAW_DATA/skills/bilibili-dynamics"
