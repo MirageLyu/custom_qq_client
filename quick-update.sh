@@ -25,17 +25,12 @@ warn() { echo -e "${YELLOW}[quick-update]${NC} $*"; }
 
 [[ -f "$COMPOSE_FILE" ]] || { echo "未找到 $COMPOSE_FILE"; exit 1; }
 
-if [[ "${SKIP_CARGO:-}" != "1" ]]; then
-    info "cargo build --release ..."
-    if ! command -v cargo &>/dev/null; then
-        warn "未找到 cargo，请先安装 Rust 或设置 SKIP_CARGO=1（仅同步 skills）"
-        exit 1
-    fi
-    cargo build --release
-    cp target/release/qq-client "$SCRIPT_DIR/qq-client"
-    info "qq-client 已更新"
+if [[ "${SKIP_PIP:-}" != "1" ]]; then
+    info "pip install -r requirements.txt ..."
+    pip install -q httpx click tomli 2>/dev/null || pip3 install -q httpx click tomli 2>/dev/null
+    info "qq-client (Python) 依赖已更新"
 else
-    info "SKIP_CARGO=1，跳过 Rust 编译"
+    info "SKIP_PIP=1，跳过 Python 依赖安装"
 fi
 
 mkdir -p "$OPENCLAW_DATA/skills/bilibili-dynamics"

@@ -1,8 +1,11 @@
 # 生产 Dockerfile — 不依赖 Docker Hub
-# qq-client 二进制由宿主机预先编译，避免拉取 rust 镜像
 FROM ghcr.io/openclaw/openclaw:latest
 
-COPY qq-client /usr/local/bin/qq-client
+# 复制 Python qq-client
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY qq_client/ /app/qq_client/
+
 COPY config.toml /app/config.toml
 
 RUN mkdir -p /app/data

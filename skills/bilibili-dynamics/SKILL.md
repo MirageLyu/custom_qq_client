@@ -9,7 +9,7 @@ author: qq-client
 
 **硬性规则**：`latest` 子命令**必须**使用 `--format json`（从 1.1.1 起不传 format 时默认已是 json）。若使用 `--format text`，工具会输出含 `【游戏名】最新动态` 的旧版纯文本，**禁止**把该旧版文本直接贴给用户；遇到 text 输出应重新执行并带 `json`。
 
-你可以使用 `qq-client` 命令行工具查询米哈游旗下三款游戏的B站官方账号最新动态。
+你可以使用 `python3 -m qq_client` 命令行工具查询米哈游旗下三款游戏的B站官方账号最新动态。
 
 ## 何时使用
 
@@ -34,13 +34,13 @@ author: qq-client
 ### 查询所有游戏的最新动态
 
 ```bash
-qq-client --config /app/config.toml latest --all --count 2 --format json
+python3 -m qq_client --config /app/config.toml latest --all --count 2 --format json
 ```
 
 ### 查询指定游戏的最新动态
 
 ```bash
-qq-client --config /app/config.toml latest --game <游戏名> --count 5 --format json
+python3 -m qq_client --config /app/config.toml latest --game <游戏名> --count 5 --format json
 ```
 
 将 `<游戏名>` 替换为 `原神`、`星铁`、`绝区零`、`genshin`、`hsr`、`zzz` 之一。
@@ -48,13 +48,13 @@ qq-client --config /app/config.toml latest --game <游戏名> --count 5 --format
 ### 查询多页历史动态
 
 ```bash
-qq-client --config /app/config.toml latest --game <游戏名> --count 5 --format json --pages 3 --include-forwards
+python3 -m qq_client --config /app/config.toml latest --game <游戏名> --count 5 --format json --pages 3 --include-forwards
 ```
 
 ### 查看数据库统计
 
 ```bash
-qq-client --config /app/config.toml stats
+python3 -m qq_client --config /app/config.toml stats
 ```
 
 ---

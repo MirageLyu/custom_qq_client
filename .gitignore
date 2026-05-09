@@ -8,3 +8,4 @@ debug_response.json
 output_*.txt
 build.log
 build2.log
+__pycache__/

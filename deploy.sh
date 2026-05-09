@@ -98,23 +98,10 @@ if [[ -z "$QQBOT_TOKEN" && -n "$QQBOT_APPID" && -n "$QQBOT_SECRET" ]]; then
     QQBOT_TOKEN="${QQBOT_APPID}:${QQBOT_SECRET}"
 fi
 
-# ===== 3. 编译 qq-client =====
-info "[3/8] 编译 qq-client..."
-if [[ -f "$SCRIPT_DIR/qq-client" ]] && [[ "$SCRIPT_DIR/qq-client" -nt "$SCRIPT_DIR/src/main.rs" ]]; then
-    info "  二进制已存在且较新，跳过编译"
-else
-    if ! command -v rustc &>/dev/null; then
-        info "  安装 Rust 工具链..."
-        sudo apt-get install -y -qq build-essential pkg-config libssl-dev
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-    fi
-    source "$HOME/.cargo/env" 2>/dev/null || true
-    info "  编译中（首次约 3-5 分钟）..."
-    cd "$SCRIPT_DIR" && cargo build --release
-    cp target/release/qq-client "$SCRIPT_DIR/qq-client"
-    info "  编译完成"
-fi
+# ===== 3. 准备 qq-client（Python）=====
+info "[3/8] 准备 qq-client..."
+pip install httpx click tomli 2>/dev/null || pip3 install httpx click tomli 2>/dev/null
+info "  qq-client (Python) 已就绪"
 
 # ===== 4. 构建 Docker 镜像 =====
 info "[4/8] 构建 Docker 镜像..."
